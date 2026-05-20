@@ -1,0 +1,5 @@
+[36m🔍 Checking for undefined CSS classes...[0m
+
+[36mFound 25 CSS classes defined[0m
+[36mFound 236 unique classes used in components[0m
+[32m✅ All CSS classes are properly defined[0m

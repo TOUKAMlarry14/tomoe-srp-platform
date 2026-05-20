@@ -1,0 +1,617 @@
+-- ============================================================
+-- SCRIPT COMPLET DE CRÉATION DE LA BASE DE DONNÉES T.O.M.O.E SRP
+-- Auteur : Assistant IA
+-- Date : 2026-05-17
+-- Version : 1.0
+-- ============================================================
+
+-- ------------------------------------------------------------
+-- 1. CRÉATION DE LA BASE (optionnel, adapter selon votre environnement)
+-- ------------------------------------------------------------
+CREATE DATABASE IF NOT EXISTS tomoe_srp
+CHARACTER SET utf8mb4
+COLLATE utf8mb4_unicode_ci;
+
+USE tomoe_srp;
+
+-- ------------------------------------------------------------
+-- 2. TABLES PRINCIPALES (structure de l'école)
+-- ------------------------------------------------------------
+
+-- Cycles d'études (francophone, anglophone, bilingue)
+CREATE TABLE cycles_etudes (
+    id_cycle INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    libelle VARCHAR(100) NOT NULL,
+    type_cycle ENUM('maternelle', 'primaire', 'creche') DEFAULT 'primaire',
+    actif BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Niveaux (SIL, CP, CE1, ... , Nursery, Class 1, etc.)
+CREATE TABLE niveaux (
+    id_niveau INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    id_cycle INT UNSIGNED,
+    code VARCHAR(20) NOT NULL UNIQUE,
+    libelle_fr VARCHAR(100),
+    libelle_en VARCHAR(100),
+    ordre INT UNSIGNED COMMENT 'Ordre pour passage automatique supérieur',
+    actif BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_cycle) REFERENCES cycles_etudes(id_cycle) ON DELETE RESTRICT
+);
+
+-- Classes (ex: CM1-A, CM1-B)
+CREATE TABLE classes (
+    id_classe INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    id_niveau INT UNSIGNED,
+    libelle VARCHAR(50) NOT NULL,
+    capacite_max INT UNSIGNED DEFAULT 30,
+    actif BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_niveau) REFERENCES niveaux(id_niveau) ON DELETE RESTRICT
+);
+
+-- Salles de classe
+CREATE TABLE salles (
+    id_salle INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    libelle VARCHAR(50) NOT NULL UNIQUE,
+    localisation VARCHAR(100) COMMENT 'Rez-de-chaussée, 1er étage, ...',
+    surface DECIMAL(8,2),
+    capacite_tables INT UNSIGNED,
+    actif BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Affectation d'une salle à une classe (une classe a une salle principale)
+CREATE TABLE classe_salle (
+    id_classe INT UNSIGNED,
+    id_salle INT UNSIGNED,
+    annee_scolaire_id INT UNSIGNED,
+    PRIMARY KEY (id_classe, id_salle, annee_scolaire_id),
+    FOREIGN KEY (id_classe) REFERENCES classes(id_classe) ON DELETE CASCADE,
+    FOREIGN KEY (id_salle) REFERENCES salles(id_salle) ON DELETE CASCADE
+);
+
+-- Matières (cours)
+CREATE TABLE matieres (
+    id_matiere INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    libelle VARCHAR(100) NOT NULL,
+    coefficient DECIMAL(3,2) DEFAULT 1.00,
+    type_matiere ENUM('francophone', 'anglophone', 'bilingue', 'nationale') DEFAULT 'francophone',
+    actif BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- ------------------------------------------------------------
+-- 3. GESTION DES UTILISATEURS ET PERSONNES
+-- ------------------------------------------------------------
+
+-- Utilisateurs (authentification Laravel)
+CREATE TABLE users (
+    id INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    remember_token VARCHAR(100) NULL,
+    email_verified_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Personnes (enseignants, parents, administratifs, chauffeurs)
+CREATE TABLE personnes (
+    id_personne INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    user_id INT UNSIGNED UNIQUE NULL COMMENT 'Peut être NULL pour les personnes sans compte (ex: élèves)',
+    nom VARCHAR(100) NOT NULL,
+    prenom VARCHAR(100) NOT NULL,
+    date_naissance DATE NOT NULL,
+    lieu_naissance_id INT UNSIGNED,
+    mobile VARCHAR(15),
+    telephone VARCHAR(15),
+    type_personne ENUM('fondateur', 'admin', 'directeur', 'scolarite', 'enseignant', 'parent', 'chauffeur') NOT NULL,
+    actif BOOLEAN DEFAULT TRUE,
+    alanya_id VARCHAR(15) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (lieu_naissance_id) REFERENCES villes_cameroun(id_ville) ON DELETE SET NULL
+);
+
+-- ------------------------------------------------------------
+-- 4. GESTION DES ÉLÈVES (indépendants mais liés aux parents)
+-- ------------------------------------------------------------
+CREATE TABLE eleves (
+    matricule INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    nom VARCHAR(60) NOT NULL,
+    prenom VARCHAR(60) NOT NULL,
+    date_naissance DATE NOT NULL,
+    lieu_naissance_id INT UNSIGNED,
+    sexe ENUM('fille', 'garcon', 'autre') DEFAULT 'fille',
+    photo_url VARCHAR(255) NULL,
+    actif BOOLEAN DEFAULT TRUE,
+    id_classe_actuelle INT UNSIGNED,
+    id_annee_scolaire_inscription INT UNSIGNED,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (lieu_naissance_id) REFERENCES villes_cameroun(id_ville) ON DELETE SET NULL,
+    FOREIGN KEY (id_classe_actuelle) REFERENCES classes(id_classe) ON DELETE SET NULL
+);
+
+-- Lien parent-élève (plusieurs enfants par parent)
+CREATE TABLE parent_eleve (
+    id_parent INT UNSIGNED,
+    matricule_eleve INT UNSIGNED,
+    PRIMARY KEY (id_parent, matricule_eleve),
+    FOREIGN KEY (id_parent) REFERENCES personnes(id_personne) ON DELETE CASCADE,
+    FOREIGN KEY (matricule_eleve) REFERENCES eleves(matricule) ON DELETE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- 5. ANNÉES SCOLAIRES, SÉQUENCES, ÉVALUATIONS
+-- ------------------------------------------------------------
+CREATE TABLE annees_scolaires (
+    id_annee INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    libelle VARCHAR(50) NOT NULL UNIQUE COMMENT 'ex: 2024-2025',
+    date_debut DATE NOT NULL,
+    date_fin DATE NOT NULL,
+    date_remise_diplomes DATE NULL,
+    est_active BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- 6 séquences par année
+CREATE TABLE sequences (
+    id_sequence INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    id_annee INT UNSIGNED,
+    numero INT UNSIGNED CHECK (numero BETWEEN 1 AND 6),
+    libelle VARCHAR(100),
+    date_debut DATE,
+    date_fin DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_annee) REFERENCES annees_scolaires(id_annee) ON DELETE CASCADE,
+    UNIQUE KEY (id_annee, numero)
+);
+
+-- Évaluations (notes des élèves)
+CREATE TABLE evaluations (
+    id_evaluation INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    id_sequence INT UNSIGNED,
+    id_eleve INT UNSIGNED,
+    id_matiere INT UNSIGNED,
+    note DECIMAL(5,2) CHECK (note BETWEEN 0 AND 20),
+    appreciation VARCHAR(255),
+    id_enseignant INT UNSIGNED COMMENT 'Qui a saisi la note',
+    date_saisie TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_sequence) REFERENCES sequences(id_sequence) ON DELETE CASCADE,
+    FOREIGN KEY (id_eleve) REFERENCES eleves(matricule) ON DELETE CASCADE,
+    FOREIGN KEY (id_matiere) REFERENCES matieres(id_matiere) ON DELETE RESTRICT,
+    FOREIGN KEY (id_enseignant) REFERENCES personnes(id_personne) ON DELETE SET NULL
+);
+
+-- ------------------------------------------------------------
+-- 6. PRÉSENCES, RETARDS, ABSENCES
+-- ------------------------------------------------------------
+CREATE TABLE presences (
+    id_presence INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    id_eleve INT UNSIGNED,
+    date_jour DATE NOT NULL,
+    statut ENUM('present', 'absent', 'retard', 'excuse') DEFAULT 'present',
+    justificatif_url VARCHAR(255) NULL,
+    heures_absence DECIMAL(4,2) DEFAULT 0,
+    id_enseignant_signataire INT UNSIGNED,
+    notification_parent_envoyee BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_eleve) REFERENCES eleves(matricule) ON DELETE CASCADE,
+    UNIQUE KEY unique_presence (id_eleve, date_jour)
+);
+
+-- ------------------------------------------------------------
+-- 7. EMPLOI DU TEMPS
+-- ------------------------------------------------------------
+CREATE TABLE emploi_du_temps (
+    id_emploi INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    id_classe INT UNSIGNED,
+    id_matiere INT UNSIGNED,
+    id_enseignant INT UNSIGNED,
+    jour_semaine ENUM('lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi') NOT NULL,
+    heure_debut TIME NOT NULL,
+    heure_fin TIME NOT NULL,
+    id_annee INT UNSIGNED,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_classe) REFERENCES classes(id_classe) ON DELETE CASCADE,
+    FOREIGN KEY (id_matiere) REFERENCES matieres(id_matiere) ON DELETE RESTRICT,
+    FOREIGN KEY (id_enseignant) REFERENCES personnes(id_personne) ON DELETE RESTRICT,
+    FOREIGN KEY (id_annee) REFERENCES annees_scolaires(id_annee) ON DELETE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- 8. ENSEIGNANTS - MATIÈRES - CLASSES (affectations)
+-- ------------------------------------------------------------
+CREATE TABLE enseignement (
+    id_enseignement INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    id_enseignant INT UNSIGNED,
+    id_matiere INT UNSIGNED,
+    id_classe INT UNSIGNED,
+    annee_scolaire_id INT UNSIGNED,
+    est_titulaire BOOLEAN DEFAULT FALSE COMMENT 'Titulaire de la classe',
+    actif BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_enseignant) REFERENCES personnes(id_personne) ON DELETE CASCADE,
+    FOREIGN KEY (id_matiere) REFERENCES matieres(id_matiere) ON DELETE CASCADE,
+    FOREIGN KEY (id_classe) REFERENCES classes(id_classe) ON DELETE CASCADE,
+    FOREIGN KEY (annee_scolaire_id) REFERENCES annees_scolaires(id_annee) ON DELETE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- 9. COURS, DEVOIRS, DOCUMENTS PÉDAGOGIQUES
+-- ------------------------------------------------------------
+CREATE TABLE cours (
+    id_cours INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    id_enseignement INT UNSIGNED,
+    titre VARCHAR(255) NOT NULL,
+    description TEXT,
+    fichier_url VARCHAR(255) NOT NULL,
+    type_document ENUM('cours', 'devoir', 'exercice', 'sequence') DEFAULT 'cours',
+    date_publication DATE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_enseignement) REFERENCES enseignement(id_enseignement) ON DELETE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- 10. BIBLIOTHÈQUE (livres, emprunts)
+-- ------------------------------------------------------------
+CREATE TABLE livres_bibliotheque (
+    id_livre INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    titre VARCHAR(255) NOT NULL,
+    auteurs VARCHAR(255),
+    prix DECIMAL(10,2),
+    edition VARCHAR(100),
+    annee_parution YEAR,
+    total_copies INT UNSIGNED DEFAULT 1,
+    copies_disponibles INT UNSIGNED DEFAULT 1,
+    section ENUM('francophone', 'anglophone', 'bilingue') DEFAULT 'francophone',
+    id_niveau INT UNSIGNED COMMENT 'Niveau recommandé',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_niveau) REFERENCES niveaux(id_niveau) ON DELETE SET NULL
+);
+
+CREATE TABLE emprunts_livres (
+    id_emprunt INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    id_livre INT UNSIGNED,
+    id_emprunteur INT UNSIGNED COMMENT 'id_personne (élève, enseignant, parent)',
+    type_emprunteur ENUM('eleve', 'enseignant', 'parent') NOT NULL,
+    date_emprunt DATE NOT NULL,
+    date_retour_prevue DATE NOT NULL,
+    date_retour_effective DATE NULL,
+    est_rendu BOOLEAN DEFAULT FALSE,
+    avertissements_envoyes INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_livre) REFERENCES livres_bibliotheque(id_livre) ON DELETE CASCADE,
+    FOREIGN KEY (id_emprunteur) REFERENCES personnes(id_personne) ON DELETE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- 11. FRAIS DE SCOLARITÉ, PAIEMENTS
+-- ------------------------------------------------------------
+CREATE TABLE frais_scolarite (
+    id_frais INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    id_niveau INT UNSIGNED,
+    id_annee INT UNSIGNED,
+    frais_inscription DECIMAL(10,2) NOT NULL,
+    pension_annuelle DECIMAL(10,2) NOT NULL,
+    nombre_tranches INT DEFAULT 3,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_niveau) REFERENCES niveaux(id_niveau) ON DELETE CASCADE,
+    FOREIGN KEY (id_annee) REFERENCES annees_scolaires(id_annee) ON DELETE CASCADE
+);
+
+CREATE TABLE tranches_paiement (
+    id_tranche INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    id_frais INT UNSIGNED,
+    numero_tranche INT CHECK (numero_tranche BETWEEN 1 AND 4),
+    montant DECIMAL(10,2) NOT NULL,
+    date_limite DATE NOT NULL,
+    penalite_retard DECIMAL(10,2) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_frais) REFERENCES frais_scolarite(id_frais) ON DELETE CASCADE,
+    UNIQUE KEY (id_frais, numero_tranche)
+);
+
+CREATE TABLE paiements (
+    id_paiement INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    id_eleve INT UNSIGNED,
+    id_tranche INT UNSIGNED,
+    montant_paye DECIMAL(10,2) NOT NULL,
+    moyen_paiement ENUM('especes', 'orange_money', 'mtn_money', 'virement_bancaire') NOT NULL,
+    reference_transaction VARCHAR(100) UNIQUE,
+    statut ENUM('en_attente', 'valide', 'rejete') DEFAULT 'en_attente',
+    date_paiement DATE,
+    date_enregistrement TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    id_personne_enregistrement INT UNSIGNED,
+    justificatif_url VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_eleve) REFERENCES eleves(matricule) ON DELETE CASCADE,
+    FOREIGN KEY (id_tranche) REFERENCES tranches_paiement(id_tranche) ON DELETE RESTRICT,
+    FOREIGN KEY (id_personne_enregistrement) REFERENCES personnes(id_personne) ON DELETE SET NULL
+);
+
+-- ------------------------------------------------------------
+-- 12. TRANSPORT SCOLAIRE
+-- ------------------------------------------------------------
+CREATE TABLE abonnements_transport (
+    id_abonnement INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    id_eleve INT UNSIGNED,
+    id_annee INT UNSIGNED,
+    trajet ENUM('matin', 'soir', 'matin_soir') NOT NULL,
+    adresse_ramassage VARCHAR(255),
+    adresse_depot VARCHAR(255),
+    actif BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_eleve) REFERENCES eleves(matricule) ON DELETE CASCADE,
+    FOREIGN KEY (id_annee) REFERENCES annees_scolaires(id_annee) ON DELETE CASCADE
+);
+
+CREATE TABLE tournees_transport (
+    id_tournee INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    date_tournee DATE NOT NULL,
+    id_chauffeur INT UNSIGNED,
+    id_eleve INT UNSIGNED,
+    statut_depot ENUM('en_attente', 'effectue', 'signale_absent') DEFAULT 'en_attente',
+    heure_depot TIME NULL,
+    confirmation_parent BOOLEAN DEFAULT FALSE,
+    notes VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_chauffeur) REFERENCES personnes(id_personne) ON DELETE SET NULL,
+    FOREIGN KEY (id_eleve) REFERENCES eleves(matricule) ON DELETE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- 13. DISCIPLINE, CONVOCATIONS
+-- ------------------------------------------------------------
+CREATE TABLE incidents_disciplinaires (
+    id_incident INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    id_eleve INT UNSIGNED,
+    date_incident DATE NOT NULL,
+    nature_infraction VARCHAR(255),
+    description TEXT,
+    points_discipline INT DEFAULT 0,
+    sanction VARCHAR(255),
+    id_enseignant_signaleur INT UNSIGNED,
+    notification_parent BOOLEAN DEFAULT FALSE,
+    etiquettes JSON COMMENT 'Stocke les étiquettes discipline',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_eleve) REFERENCES eleves(matricule) ON DELETE CASCADE,
+    FOREIGN KEY (id_enseignant_signaleur) REFERENCES personnes(id_personne) ON DELETE SET NULL
+);
+
+CREATE TABLE convocations (
+    id_convocation INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    id_eleve INT UNSIGNED,
+    id_parent INT UNSIGNED,
+    motif VARCHAR(255) NOT NULL,
+    date_convocation DATETIME NOT NULL,
+    lieu VARCHAR(255),
+    genere_par ENUM('enseignant', 'scolarite', 'directeur') NOT NULL,
+    pdf_url VARCHAR(255),
+    statut ENUM('envoye', 'vu', 'traite') DEFAULT 'envoye',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_eleve) REFERENCES eleves(matricule) ON DELETE CASCADE,
+    FOREIGN KEY (id_parent) REFERENCES personnes(id_personne) ON DELETE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- 14. MESSAGES ET NOTIFICATIONS
+-- ------------------------------------------------------------
+CREATE TABLE messages (
+    id_message INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    id_expediteur INT UNSIGNED NOT NULL,
+    destinataire_type ENUM('parent', 'enseignant', 'classe', 'tous') NOT NULL,
+    id_destinataire INT UNSIGNED NULL,
+    objet VARCHAR(255) NOT NULL,
+    contenu TEXT NOT NULL,
+    type_message ENUM('individuel', 'groupe_parents', 'groupe_paiement') DEFAULT 'individuel',
+    valide_par_fondateur BOOLEAN DEFAULT FALSE,
+    date_envoi TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_expediteur) REFERENCES personnes(id_personne) ON DELETE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- 15. SALAIRES
+-- ------------------------------------------------------------
+CREATE TABLE salaires (
+    id_salaire INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    id_personne INT UNSIGNED,
+    mois DATE NOT NULL COMMENT 'Premier jour du mois concerné',
+    montant_brut DECIMAL(10,2) NOT NULL,
+    retenues DECIMAL(10,2) DEFAULT 0,
+    montant_net DECIMAL(10,2) GENERATED ALWAYS AS (montant_brut - retenues) STORED,
+    statut ENUM('en_attente', 'paye', 'annule') DEFAULT 'en_attente',
+    date_paiement DATE NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_personne) REFERENCES personnes(id_personne) ON DELETE CASCADE,
+    UNIQUE KEY (id_personne, mois)
+);
+
+-- ------------------------------------------------------------
+-- 16. CURRICULUM (PROGRAMMES OFFICIELS)
+-- ------------------------------------------------------------
+CREATE TABLE curriculum_programmes (
+    id_programme INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    niveau_curriculum ENUM('Niveau1', 'Niveau2', 'Niveau3') NOT NULL COMMENT 'Niveau1: SIL-CP, Niveau2: CE1-CE2, Niveau3: CM1-CM2',
+    id_matiere INT UNSIGNED,
+    objectifs TEXT,
+    competences_attendues TEXT,
+    themes_centres_interet JSON,
+    ressources_json_url VARCHAR(255),
+    annee_publication YEAR,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_matiere) REFERENCES matieres(id_matiere) ON DELETE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- 17. LOGS SYSTÈME (pour traçabilité)
+-- ------------------------------------------------------------
+CREATE TABLE logs_systeme (
+    id_log INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    id_personne INT UNSIGNED,
+    action VARCHAR(50) NOT NULL COMMENT 'CREATE, UPDATE, DELETE, LOGIN, LOGOUT',
+    entite VARCHAR(100) NOT NULL COMMENT 'Eleve, Enseignant, Classe, etc.',
+    id_entite INT UNSIGNED,
+    details JSON,
+    ip_adresse VARCHAR(45),
+    user_agent TEXT,
+    date_action TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_personne) REFERENCES personnes(id_personne) ON DELETE SET NULL
+);
+
+-- ------------------------------------------------------------
+-- 18. TO-DO LIST (pour tous les utilisateurs)
+-- ------------------------------------------------------------
+CREATE TABLE to_do_tasks (
+    id_task INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    id_personne INT UNSIGNED NOT NULL,
+    titre VARCHAR(255) NOT NULL,
+    description TEXT,
+    priorite ENUM('basse', 'moyenne', 'haute', 'urgente') DEFAULT 'moyenne',
+    statut ENUM('a_faire', 'en_cours', 'termine', 'annule') DEFAULT 'a_faire',
+    date_echeance DATETIME,
+    date_creation TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    date_completion TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_personne) REFERENCES personnes(id_personne) ON DELETE CASCADE
+);
+
+-- ------------------------------------------------------------
+-- 19. VILLES DU CAMEROUN (pré-remplissage ci-dessous)
+-- ------------------------------------------------------------
+CREATE TABLE villes_cameroun (
+    id_ville INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    nom VARCHAR(100) NOT NULL,
+    region VARCHAR(50),
+    departement VARCHAR(50),
+    actif BOOLEAN DEFAULT TRUE
+);
+
+-- ------------------------------------------------------------
+-- 20. LOGO DE L'ÉCOLE (paramètre global)
+-- ------------------------------------------------------------
+CREATE TABLE parametres_ecole (
+    id_param INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    cle VARCHAR(100) UNIQUE NOT NULL,
+    valeur TEXT,
+    description VARCHAR(255),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- ------------------------------------------------------------
+-- 21. INSERTION DES DONNÉES DE BASE (seeders)
+-- ------------------------------------------------------------
+
+-- Villes du Cameroun (extrait représentatif)
+INSERT INTO villes_cameroun (nom, region, departement) VALUES
+('Douala', 'Littoral', 'Wouri'),
+('Yaoundé', 'Centre', 'Mfoundi'),
+('Garoua', 'Nord', 'Bénoué'),
+('Maroua', 'Extrême-Nord', 'Diamaré'),
+('Bafoussam', 'Ouest', 'Mifi'),
+('Bamenda', 'Nord-Ouest', 'Mezam'),
+('Ngaoundéré', 'Adamaoua', 'Vina'),
+('Bertoua', 'Est', 'Lom-et-Djérem'),
+('Ebolowa', 'Sud', 'Mvila'),
+('Kribi', 'Sud', 'Océan'),
+('Limbe', 'Sud-Ouest', 'Fako'),
+('Edéa', 'Littoral', 'Sanaga-Maritime'),
+('Foumban', 'Ouest', 'Noun'),
+('Kumba', 'Sud-Ouest', 'Meme'),
+('Buea', 'Sud-Ouest', 'Fako'),
+('Mbalmayo', 'Centre', 'Nyong-et-So''o'),
+('Meiganga', 'Adamaoua', 'Mbéré'),
+('Yagoua', 'Extrême-Nord', 'Mayo-Danay'),
+('Mbouda', 'Ouest', 'Bamboutos'),
+('Dschang', 'Ouest', 'Menoua');
+
+-- Cycles d'études
+INSERT INTO cycles_etudes (libelle, type_cycle) VALUES
+('Francophone', 'primaire'),
+('Anglophone', 'primaire'),
+('Bilingue', 'primaire'),
+('Maternelle francophone', 'maternelle'),
+('Maternelle anglophone', 'maternelle'),
+('Crèche', 'creche');
+
+-- Niveaux (francophone & anglophone)
+INSERT INTO niveaux (id_cycle, code, libelle_fr, libelle_en, ordre) VALUES
+(1, 'SIL', 'Section d''Initiation à la Lecture', 'Reading Initiation Section', 1),
+(1, 'CP', 'Cours Préparatoire', 'Preparatory Course', 2),
+(1, 'CE1', 'Cours Élémentaire 1', 'Elementary Course 1', 3),
+(1, 'CE2', 'Cours Élémentaire 2', 'Elementary Course 2', 4),
+(1, 'CM1', 'Cours Moyen 1', 'Middle Course 1', 5),
+(1, 'CM2', 'Cours Moyen 2', 'Middle Course 2', 6),
+(2, 'Nursery1', 'Maternelle 1', 'Nursery 1', 1),
+(2, 'Nursery2', 'Maternelle 2', 'Nursery 2', 2),
+(2, 'Nursery3', 'Maternelle 3', 'Nursery 3', 3),
+(2, 'Class1', 'Cours Préparatoire', 'Class 1', 4),
+(2, 'Class2', 'Cours Élémentaire 1', 'Class 2', 5),
+(2, 'Class3', 'Cours Élémentaire 2', 'Class 3', 6),
+(2, 'Class4', 'Cours Moyen 1', 'Class 4', 7),
+(2, 'Class5', 'Cours Moyen 2', 'Class 5', 8),
+(2, 'Class6', 'Cours Moyen 3', 'Class 6', 9);
+
+-- Matières (francophone)
+INSERT INTO matieres (libelle, coefficient, type_matiere) VALUES
+('Français', 4.00, 'francophone'),
+('Mathématiques', 4.00, 'francophone'),
+('Anglais', 2.00, 'anglophone'),
+('Sciences et Technologie', 2.00, 'francophone'),
+('Histoire-Géographie', 1.50, 'francophone'),
+('Éducation Civique et Morale', 1.00, 'francophone'),
+('Arts Plastiques', 1.00, 'francophone'),
+('Musique', 0.50, 'francophone'),
+('Éducation Physique et Sportive', 1.00, 'francophone'),
+('Langues et Cultures Nationales', 1.00, 'nationale');
+
+-- ------------------------------------------------------------
+-- MATIÈRES POUR LE CYCLE ANGLOPHONE
+-- À exécuter après la création de la table `matieres`
+-- ------------------------------------------------------------
+
+INSERT INTO matieres (libelle, coefficient, type_matiere, actif) VALUES
+('English Language', 4.00, 'anglophone', 1),
+('Mathematics', 4.00, 'anglophone', 1),
+('French', 2.00, 'francophone', 1),  -- français pour anglophones
+('Science and Technology', 2.00, 'anglophone', 1),
+('Social Studies', 1.50, 'anglophone', 1),
+('Civic and Moral Education', 1.00, 'anglophone', 1),
+('Arts and Crafts', 1.00, 'anglophone', 1),
+('Music', 0.50, 'anglophone', 1),
+('Physical Education and Sports', 1.00, 'anglophone', 1),
+('National Languages and Cultures', 1.00, 'nationale', 1);
+
+-- Paramètres école (logo par défaut)
+INSERT INTO parametres_ecole (cle, valeur, description) VALUES
+('logo_ecole_url', '/storage/logos/default-logo.png', 'URL du logo de l''école');
+

@@ -1,0 +1,187 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Lora:ital,wght@0,400..700;1,400..700&family=IBM+Plex+Mono:ital,wght@0,100..700;1,100..700&display=swap');
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Blink UI Theme CSS
+   REQUIRED for @blinkdotnew/ui components to render correctly.
+   BlinkUIProvider adds .theme-{name} + .dark/.light to <html>,
+   activating the matching CSS variable set below.
+   ───────────────────────────────────────────────────────────────────────────── */
+@import '@blinkdotnew/ui/styles';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  /* Full viewport chain so AppShell / Sidebar h-full + flex-1 SidebarContent work */
+  html {
+    height: 100%;
+  }
+
+  #root {
+    min-height: 100%;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  body {
+    min-height: 100%;
+    min-height: 100dvh;
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans), 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    letter-spacing: var(--tracking-normal);
+  }
+}
+
+:root {
+  /* Colors */
+  --background: 210 40% 98%;
+  --foreground: 221 83% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 221 83% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 221 83% 11%;
+  --primary: 221 83% 24%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 45 93% 47%;
+  --secondary-foreground: 221 83% 24%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 16% 47%;
+  --accent: 45 93% 57%;
+  --accent-foreground: 221 83% 11%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214 32% 91%;
+  --input: 214 32% 91%;
+  --ring: 221 83% 24%;
+
+  --sidebar: 221 83% 24%;
+  --sidebar-foreground: 210 40% 98%;
+  --sidebar-primary: 45 93% 47%;
+  --sidebar-primary-foreground: 221 83% 24%;
+  --sidebar-accent: 221 83% 30%;
+  --sidebar-accent-foreground: 210 40% 98%;
+  --sidebar-border: 221 83% 30%;
+  --sidebar-ring: 45 93% 47%;
+
+  --chart-1: 221 83% 24%;
+  --chart-2: 45 93% 47%;
+  --chart-3: 199 89% 48%;
+  --chart-4: 280 65% 60%;
+  --chart-5: 340 75% 55%;
+
+  /* Fonts */
+  --font-sans: DM Sans, sans-serif;
+  --font-heading: Lora, serif;
+  --font-mono: IBM Plex Mono, monospace;
+
+  /* Font Sizes */
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+
+  /* Line Heights */
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.625;
+  --line-height-heading: 1.2;
+
+  /* Radius */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.05);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --shadow-card: 0 10px 30px -10px rgba(0,0,0,0.1);
+
+  /* Transitions */
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+  --duration-slow: 500ms;
+  --easing-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --easing-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --easing-bounce: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+
+  /* Misc */
+  --tracking-normal: 0em;
+  --spacing: 0.25rem;
+  --radius: 0.5rem;
+}
+
+:root.dark,
+.theme-linear.dark,
+.theme-glass.dark,
+.theme-midnight.dark,
+.theme-minimal.dark {
+  --background: 222 47% 6%;
+  --foreground: 210 40% 98%;
+  --card: 222 47% 8%;
+  --card-foreground: 210 40% 98%;
+  --popover: 222 47% 8%;
+  --popover-foreground: 210 40% 98%;
+  --primary: 210 40% 98%;
+  --primary-foreground: 221 83% 24%;
+  --secondary: 45 93% 47%;
+  --secondary-foreground: 221 83% 24%;
+  --muted: 217 33% 17%;
+  --muted-foreground: 215 20% 65%;
+  --accent: 45 93% 47%;
+  --accent-foreground: 222 47% 11%;
+  --destructive: 0 62% 30%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 217 33% 17%;
+  --input: 217 33% 17%;
+  --ring: 212 72% 59%;
+
+  --sidebar: 222 47% 4%;
+  --sidebar-foreground: 210 40% 98%;
+  --sidebar-primary: 45 93% 47%;
+  --sidebar-primary-foreground: 221 83% 24%;
+  --sidebar-accent: 217 33% 17%;
+  --sidebar-accent-foreground: 210 40% 98%;
+  --sidebar-border: 217 33% 17%;
+  --sidebar-ring: 221 83% 24%;
+
+  --chart-1: 210 40% 98%;
+  --chart-2: 45 93% 47%;
+  --chart-3: 199 89% 48%;
+  --chart-4: 280 65% 60%;
+  --chart-5: 340 75% 55%;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@layer components {
+  .shadow-elegant {
+    box-shadow: 0 10px 30px -10px rgba(0,0,0,0.1);
+  }
+}
+
